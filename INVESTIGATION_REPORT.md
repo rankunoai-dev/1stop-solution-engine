@@ -129,7 +129,8 @@ RAE's toolkit ships an "AI chat". Every new product would repeat auth, streaming
 
 ### F-16 The RankUno standards have gaps that 1Stop must work around
 The Step 1 (Investigation) and Step 4 (Implementation Plan) standard files are referenced but do not exist. The README also links skills that do not exist (`gsc-ga4-analytics-standard`, `code-review-agent`, …). prompt-engine ADR 0001 found that `integrations/semrush.py` violates the standards' own rules.
-**Implication:** 1Stop copies `src/core` verbatim, following prompt-engine ADR 0001, instead of depending on it, and does not copy `integrations/semrush.py`. This investigation's structure (findings, decisions, risks, questions, gates) is offered back as a draft Step 1 standard. Decision D-26.
+*Confirmed in R0.2 (2026-10-01):* `project-standards` also fails its own quality gate (format, lint, mypy); see ADR 0001 "As built".
+**Implication:** 1Stop copies `src/core` verbatim plus a minimal, documented conformance patch, following prompt-engine ADR 0001, instead of depending on it, and does not copy `integrations/semrush.py`. This investigation's structure (findings, decisions, risks, questions, gates) is offered back as a draft Step 1 standard. Decision D-26.
 
 ### F-17 Existing RankUno code can be reused
 | Need in 1Stop | Existing solution to reuse or learn from |

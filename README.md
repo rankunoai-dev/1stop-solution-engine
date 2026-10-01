@@ -25,7 +25,8 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | Capability | Since |
 | :-- | :-- |
 | Development environment and the full quality gate (format, lint, dependency layers, strict types, tests with an 85% coverage floor) | R0.1 |
-| CI on GitHub Actions: the same gate plus a gitleaks secret scan of the full history | R0.1 (runs once the GitHub remote exists) |
+| CI on GitHub Actions: the same gate plus a gitleaks secret scan of the full history | R0.1 |
+| Governed core from project-standards (`BaseTool` pipeline, deny-by-default guardrails, rate limiter, in-memory cost ledger, JSON logging, retries), 66 tests passing; deviations listed in [ADR 0001](docs/adr/0001-reuse-project-standards-core.md) | R0.2 |
 
 Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 
