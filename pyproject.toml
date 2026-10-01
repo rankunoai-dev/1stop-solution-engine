@@ -23,8 +23,9 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",
-    "ruff>=0.6",
-    "mypy>=1.11",
+    # Exact pins so local, pre-commit and CI results are identical.
+    "ruff==0.16.9",
+    "mypy==2.3.1",
     "import-linter>=2.1",
     "pre-commit>=3.7",
 ]
@@ -54,10 +55,16 @@ select = [
 ignore = ["D203", "D213", "ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "D100", "D103", "D104", "ANN201", "ANN001"]
+# Tests document themselves through their names; docstring and annotation
+# rules are relaxed there (as in prompt-engine).
+"tests/**" = ["S101", "S105", "S106", "D", "ANN"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.isort]
+# `src` is itself a package (imports read `src.core.x`), so declare it first-party.
+known-first-party = ["src", "tests"]
 
 # ---------------------------------------------------------------------------
 # Type checking: strict on src/, relaxed on tests/.
