@@ -1,0 +1,10 @@
+title = "1Stop gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "The archived v1 .env.example contains placeholder values only (xxxx...), kept for traceability."
+paths = [
+  '''docs/archive/v1/\.env\.example''',
+]

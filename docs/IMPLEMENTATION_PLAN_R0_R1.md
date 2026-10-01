@@ -43,7 +43,7 @@
 | File | Content |
 | :-- | :-- |
 | `.gitignore`, `.editorconfig` | From project-standards; adds `web/node_modules`, `web/dist`, `.env*` (except `.env.example`) |
-| `pyproject.toml` | Package `onestop`; deps: fastapi, uvicorn[standard], pydantic, pydantic-settings, sqlalchemy[asyncio], psycopg[binary], alembic, pgvector, httpx, tenacity, python-json-logger, sentry-sdk, itsdangerous; dev: pytest, pytest-asyncio, pytest-cov, ruff, mypy, import-linter, respx. ruff/mypy config copied from project-standards. |
+| `pyproject.toml` | Package `onestop`. *As built:* only pydantic, pydantic-settings and tenacity at R0.1; each further dependency is added in the slice that first uses it, so it is reviewed with its code. Planned deps: fastapi, uvicorn[standard], pydantic, pydantic-settings, sqlalchemy[asyncio], psycopg[binary], alembic, pgvector, httpx, tenacity, python-json-logger, sentry-sdk, itsdangerous; dev: pytest, pytest-asyncio, pytest-cov, ruff, mypy, import-linter, respx. ruff/mypy config copied from project-standards. |
 | `.importlinter` | Contract: `src.core` ↛ `src.integrations`/`src.modules`; `src.integrations` ↛ `src.modules` |
 | `scripts/verify.ps1`, `Makefile` | ruff format --check, ruff check, mypy, lint-imports, pytest --cov |
 | `.github/workflows/ci.yml` | The same checks plus gitleaks on the repo |

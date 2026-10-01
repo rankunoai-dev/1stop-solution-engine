@@ -20,7 +20,25 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | **Approver** | AI Lead (all gates during testing) |
 | **Last updated** | 2026-10-01 |
 
-There is nothing to install or run yet. Instructions will appear here only when they work (SDLC Step 8).
+## What works today
+
+| Capability | Since |
+| :-- | :-- |
+| Development environment and the full quality gate (format, lint, dependency layers, strict types, tests with an 85% coverage floor) | R0.1 |
+| CI on GitHub Actions: the same gate plus a gitleaks secret scan of the full history | R0.1 (runs once the GitHub remote exists) |
+
+Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
+
+### Development setup (Windows)
+
+Requires Python 3.11+.
+
+```powershell
+.\scriptsootstrap.ps1   # creates .venv, installs dev tools, installs pre-commit hooks
+.\scriptserify.ps1      # Step 7 gate; must pass before any slice is reported complete
+```
+
+Configuration: copy `.env.example` to `.env`. Nothing reads it yet; it lists every variable the architecture defines.
 
 ---
 

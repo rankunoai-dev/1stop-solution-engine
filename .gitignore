@@ -1,0 +1,46 @@
+# Environment variables. Only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Credentials that must never be committed
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Web app
+web/node_modules/
+web/dist/
+
+# Local model and embedding caches
+.cache/
+models/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and local outputs
+logs/
+*.log
+eval/reports/
+spikes/
