@@ -15,7 +15,7 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | :-- | :-- |
 | **SDLC step** | Gate G2 **approved 2026-10-01** ([ADR 0000](docs/adr/0000-architecture-approval.md)); Step 6 implementation of R0 in progress |
 | **Phase** | Architecture and R0/R1 plan drafted (2026-10-01). Investigation compressed by owner decision: remaining spikes run as early build slices. |
-| **Code** | None yet. No production code is written until the Step 3 HITL architecture approval (Gate G2). |
+| **Code** | Slices R0.1, R0.2, R0.3 implemented and verified. |
 | **Approved architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | **Approver** | AI Lead (all gates during testing) |
 | **Last updated** | 2026-10-01 |
@@ -27,6 +27,8 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | Development environment and the full quality gate (format, lint, dependency layers, strict types, tests with an 85% coverage floor) | R0.1 |
 | CI on GitHub Actions: the same gate plus a gitleaks secret scan of the full history | R0.1 |
 | Governed core from project-standards (`BaseTool` pipeline, deny-by-default guardrails, rate limiter, in-memory cost ledger, JSON logging, retries), 66 tests passing; deviations listed in [ADR 0001](docs/adr/0001-reuse-project-standards-core.md) | R0.2 |
+| Typed 1Stop settings (`OneStopSettings`): every variable in `.env.example`, comma-separated email lists, spend-cap sanity check, and production refuses to boot with any required value missing (all problems reported at once) | R0.3 |
+| Platform settings (`OneStopSettings` extending core Settings; typed env variables, secret masking with `SecretStr`, production boot refusal for missing secrets, spending cap bounds validation), 72 tests passing | R0.3 |
 
 Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 
@@ -35,11 +37,11 @@ Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 Requires Python 3.11+.
 
 ```powershell
-.\scriptsootstrap.ps1   # creates .venv, installs dev tools, installs pre-commit hooks
-.\scriptserify.ps1      # Step 7 gate; must pass before any slice is reported complete
+.\scripts\bootstrap.ps1   # creates .venv, installs dev tools, installs pre-commit hooks
+.\scripts\verify.ps1      # Step 7 gate; must pass before any slice is reported complete
 ```
 
-Configuration: copy `.env.example` to `.env`. Nothing reads it yet; it lists every variable the architecture defines.
+Configuration: copy `.env.example` to `.env`.
 
 ---
 
@@ -60,31 +62,10 @@ Configuration: copy `.env.example` to `.env`. Nothing reads it yet; it lists eve
 
 ---
 
-## Investigation at a glance
-
-```
-P0  Mobilise & desk review                         ✅ done
-P1  Discovery with tool owners & users ┐
-P2  Inventory, sources, doc readiness  ┘  →  Gate G1: scope, pilot tool, LLM cap
-P3  Knowledge model & access
-P4  Ingestion & content safety
-P5  Retrieval, matching & evaluation
-P6  Assistant behaviour
-P7  Assistant inside in-house tools
-P8  Compliance, sync & notifications
-P9  Security, cost & data
-P10 Platform & operations
-P11 Synthesis & HITL review            →  Gate G2: Step 3 approval, then build R0
-```
-
-Estimated at 5–6 weeks, or about 3 weeks on the fast track described in the plan.
-
----
-
 ## Standards this project follows
 
 - RankUno 8-step SDLC and the binding standards in `C:\Users\RankUno\Documents\project-standards\docs\standards\`.
-- The governed core from `project-standards/src/core` (`StrictModel`, `BaseTool`, `GuardrailEngine`, `CostLedger`), to be copied verbatim when the build starts, following prompt-engine ADR 0001 (decision D-26).
+- The governed core from `project-standards/src/core` (`StrictModel`, `BaseTool`, `GuardrailEngine`, `CostLedger`), following prompt-engine ADR 0001 (decision D-26).
 - Existing RankUno infrastructure (Railway, Supabase free tier, Sentry, Cloudflare), with free and local components first (decisions D-18, D-28).
 
 ---
