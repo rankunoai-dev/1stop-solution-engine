@@ -567,7 +567,7 @@ All **[Proposed]** items above are approved. The owner's answers are recorded in
 | :-- | :-- | :-- |
 | G2-1 | Web app stack | React + Vite SPA served by FastAPI (no extra service) |
 | G2-2 | Database location | A new free Supabase project `rankuno-1stop`, so 1Stop is isolated from other apps |
-| G2-3 | Code repository | Initialise git in this folder and create a private `rankunoai-dev/onestop` repo |
+| G2-3 | Code repository | Initialise git in this folder and create a private `rankunoai-dev/onestop` repo (created as `rankunoai-dev/1stop-solution-engine`) |
 | G2-4 | LLM for development | One provider with a no-training paid tier; Claude Haiku 4.5 recommended for structured-output reliability, Gemini Flash as the alternative; final choice by S-15 |
 | G2-5 | Spend caps | $1/day and $10/month during development |
 | G2-6 | Admin-only "sync now" | Keep (development aid; no extra cost) |

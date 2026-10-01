@@ -13,7 +13,7 @@ Approving this record approves every **[Proposed]** item in the architecture, AD
 | :-- | :-- | :-- | :-- |
 | G2-1 | Web app stack | React + Vite SPA served by FastAPI | Approved |
 | G2-2 | Database location | New free Supabase project `rankuno-1stop` | Approved |
-| G2-3 | Code repository | `git init` here + private `rankunoai-dev/onestop` | Approved (remote created by the owner; `gh` CLI not installed here) |
+| G2-3 | Code repository | `git init` here + private `rankunoai-dev/onestop` | Approved; the owner created the repo as **`rankunoai-dev/1stop-solution-engine`** (private) on 2026-10-01 |
 | G2-4 | LLM for development | Claude Haiku 4.5 (alternative: Gemini Flash, no-training tier) | **Amended:** free local model via Ollama for development on the owner's laptop; cheap paid no-training model (Claude Haiku 4.5 or Gemini Flash) only for real-doc quality checks and the deployed pilot; Gemini free tier only with fake data |
 | G2-5 | Spend caps | $1/day, $10/month | Approved |
 | G2-6 | Admin-only "sync now" | Keep | Approved |
