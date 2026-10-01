@@ -1,0 +1,37 @@
+---
+# Local development database only.
+# The app itself runs on Railway; this Compose file exists only to satisfy
+# R0.4's "spin up a local Postgres + pgvector" requirement.
+#
+# Usage:
+#   docker compose up -d db       # start
+#   docker compose down           # stop (preserves data)
+#   docker compose down -v        # stop and wipe
+#
+# The DATABASE_URL in .env must point here when running locally:
+#   DATABASE_URL=postgresql+psycopg://onestop:onestop_dev@localhost:5432/onestop
+#
+# Integration tests (marked @pytest.mark.integration) also use this container via
+# TEST_DATABASE_URL=postgresql+psycopg://onestop:onestop_dev@localhost:5432/onestop_test
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: onestop
+      POSTGRES_PASSWORD: onestop_dev
+      POSTGRES_DB: onestop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init_test_db.sql:/docker-entrypoint-initdb.d/init_test_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onestop -d onestop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
