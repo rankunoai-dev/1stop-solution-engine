@@ -14,7 +14,7 @@ authors = [{ name = "RankUno AI Automation" }]
 # Runtime dependencies are added in the slice that first uses them
 # (docs/IMPLEMENTATION_PLAN_R0_R1.md), so each addition is reviewed with its code.
 dependencies = [
-    "pydantic>=2.7,<3.0",
+    "pydantic[email]>=2.7,<3.0",  # [email] extra adds email-validator for EmailStr (R0.8)
     "pydantic-settings>=2.3,<3.0",
     "tenacity>=8.3",
     # R0.4 – database layer
