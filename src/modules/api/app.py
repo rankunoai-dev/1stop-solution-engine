@@ -27,12 +27,14 @@ response so stack traces never leak to clients.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.core.config import Environment
 from src.modules.api.routes_admin_jobs import router_admin_jobs
@@ -69,8 +71,15 @@ def create_app() -> FastAPI:
 
     application = FastAPI(title="1Stop API", lifespan=lifespan)
 
-    # -- CORS -----------------------------------------------------------------
+    # -- Settings / production logging ----------------------------------------
     s = get_onestop_settings()
+    if s.environment == Environment.PRODUCTION:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='{"level":"%(levelname)s","msg":"%(message)s","time":"%(asctime)s"}',
+        )
+
+    # -- CORS -----------------------------------------------------------------
     cors_origins: list[str] = (
         [s.app_url] if s.environment == Environment.PRODUCTION and s.app_url else ["*"]
     )
@@ -112,6 +121,11 @@ def create_app() -> FastAPI:
     application.include_router(router_chat)
     application.include_router(router_admin_spend)
     application.include_router(router_admin_jobs)
+
+    # -- SPA (last; must come after all API routes to avoid intercepting them) -
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "web", "dist")
+    if os.path.isdir(static_dir):
+        application.mount("/", StaticFiles(directory=static_dir, html=True), name="spa")
 
     return application
 

@@ -15,10 +15,10 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | :-- | :-- |
 | **SDLC step** | Gate G2 **approved 2026-10-01** ([ADR 0000](docs/adr/0000-architecture-approval.md)); Step 6 implementation of R0 in progress |
 | **Phase** | Architecture and R0/R1 plan drafted (2026-10-01). Investigation compressed by owner decision: remaining spikes run as early build slices. |
-| **Code** | Slices R0.1–R0.12 implemented and verified. |
+| **Code** | Slices R0.1–R0.13 implemented and verified. |
 | **Approved architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | **Approver** | AI Lead (all gates during testing) |
-| **Last updated** | 2026-10-02 (R0.12) |
+| **Last updated** | 2026-10-02 (R0.13) |
 
 ## What works today
 
@@ -38,6 +38,7 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | LLM provider abstraction (`LLMProvider` Protocol, `OllamaAdapter` streaming via NDJSON, `AnswerLLMTool` wired to the spend guard): providers swappable behind one interface; Ollama $0; paid providers (Haiku 4.5 / Gemini Flash) added in R1; 273 unit tests, 87% coverage | R0.10 |
 | SSE chat endpoint (`POST /api/v1/chat`) streams token events via `AnswerLLMTool`; admin spend routes (daily breakdown `GET /api/v1/admin/spend` + kill switch `POST /api/v1/admin/spend/kill-switch`); admin job queue routes (`GET /api/v1/admin/jobs`, `POST /api/v1/admin/jobs/{id}/retry`); `GET /health`; CORS middleware; global exception handler; CLI (`onestop serve|migrate|worker|sync-now`); pre-existing OllamaAdapter `validate_model` bug fixed (closed client); settings cache isolated in test fixture; 306 unit tests, 85.49% coverage | R0.11 |
 | React + Vite + TypeScript SPA (`web/`): Login (OTP two-step flow), Chat (SSE streaming token-by-token), Admin (Users table with create/deactivate/role-change, Spend with SVG bar chart and kill-switch toggle, Jobs with polling and retry); Vitest tests for SSE parser, auth flow and SSE hook; `npm run build` produces `dist/` | R0.12 |
+| `Dockerfile` (multi-stage Node→Python build), `railway.json` (deploy to Railway with migration-on-start), `docs/DEPLOY.md` (setup guide); FastAPI serves the SPA from `web/dist/` | R0.13 |
 
 Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 
