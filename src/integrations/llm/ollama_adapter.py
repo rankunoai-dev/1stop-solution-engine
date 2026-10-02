@@ -19,6 +19,7 @@ Example::
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -46,11 +47,55 @@ class OllamaAdapter:
         model: str,
         base_url: str = "http://localhost:11434",
     ) -> None:
-        """Initialise the adapter with a model tag and optional base URL."""
+        """Initialise the adapter with a model tag and optional base URL.
+
+        Args:
+            model: Ollama model tag (e.g., "qwen2.5:32b").
+            base_url: Root URL of Ollama server.
+
+        Raises:
+            ValueError: If base_url is empty.
+        """
+        if not base_url or not base_url.strip():
+            msg = "base_url cannot be empty"
+            raise ValueError(msg)
+
         self._model = model
         self._base_url = base_url.rstrip("/")
         self._input_tokens: int = 0
         self._output_tokens: int = 0
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0)  # BP-01: Connection timeout
+        )
+
+    # ------------------------------------------------------------------
+    # Model validation (BP-03)
+    # ------------------------------------------------------------------
+
+    async def validate_model(self) -> None:
+        """Check that the model exists locally via /api/tags.
+
+        Called before streaming to fail fast if model doesn't exist.
+
+        Raises:
+            IntegrationError: If model not found or /api/tags call fails.
+        """
+        url = f"{self._base_url}/api/tags"
+        try:
+            response = await self._client.get(url, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+            models = data.get("models", [])
+            model_names = [m.get("name", "") for m in models]
+            if self._model not in model_names:
+                msg = f"Model '{self._model}' not found. Available: {', '.join(model_names[:5])}"
+                raise IntegrationError("ollama", msg)
+        except IntegrationError:
+            raise
+        except httpx.HTTPStatusError as exc:
+            raise IntegrationError("ollama", f"Failed to validate model: {exc}") from exc
+        except (httpx.RequestError, OSError) as exc:
+            raise IntegrationError("ollama", f"Connection failed: {exc}") from exc
 
     # ------------------------------------------------------------------
     # LLMProvider interface
@@ -80,6 +125,9 @@ class OllamaAdapter:
         Raises:
             IntegrationError: On HTTP error (4xx/5xx) or malformed JSON line.
         """
+        # BP-03: Validate model exists before streaming
+        await self.validate_model()
+
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -89,32 +137,43 @@ class OllamaAdapter:
         url = f"{self._base_url}/api/chat"
 
         try:
-            async with (
-                httpx.AsyncClient() as client,
-                client.stream("POST", url, json=payload) as response,
-            ):
-                try:
-                    response.raise_for_status()
-                except httpx.HTTPStatusError as exc:
-                    raise IntegrationError("ollama", str(exc)) from exc
-
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
+            # BP-01: Wrap stream in asyncio timeout (35s total)
+            async with asyncio.timeout(35):
+                async with self._client.stream("POST", url, json=payload) as response:
                     try:
-                        chunk: dict[str, Any] = json.loads(line)
-                    except json.JSONDecodeError as exc:
-                        raise IntegrationError("ollama", f"JSON decode error: {exc}") from exc
+                        response.raise_for_status()
+                    except httpx.HTTPStatusError as exc:
+                        raise IntegrationError("ollama", str(exc)) from exc
 
-                    if chunk.get("done"):
-                        self._input_tokens = int(chunk.get("prompt_eval_count") or 0)
-                        self._output_tokens = int(chunk.get("eval_count") or 0)
-                    else:
-                        content = str((chunk.get("message") or {}).get("content") or "")
-                        yield Delta(text=content)
+                    last_line_at = asyncio.get_event_loop().time()
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+
+                        # BP-06: Per-line timeout (10s without a token)
+                        now = asyncio.get_event_loop().time()
+                        if now - last_line_at > 10:
+                            msg = "No token received for 10s; stream timeout"
+                            raise IntegrationError("ollama", msg)
+                        last_line_at = now
+
+                        try:
+                            chunk: dict[str, Any] = json.loads(line)
+                        except json.JSONDecodeError as exc:
+                            raise IntegrationError("ollama", f"JSON decode error: {exc}") from exc
+
+                        if chunk.get("done"):
+                            self._input_tokens = int(chunk.get("prompt_eval_count") or 0)
+                            self._output_tokens = int(chunk.get("eval_count") or 0)
+                        else:
+                            content = str((chunk.get("message") or {}).get("content") or "")
+                            yield Delta(text=content)
 
         except IntegrationError:
             raise
+        except TimeoutError as exc:
+            raise IntegrationError("ollama", "stream_timeout") from exc
         except (httpx.RequestError, OSError) as exc:
             raise IntegrationError("ollama", str(exc)) from exc
 
@@ -125,6 +184,11 @@ class OllamaAdapter:
         per word) to avoid making a round-trip to Ollama just for estimation.
         Exact counts are captured from the streaming response and available
         via ``get_usage()`` after the stream completes.
+
+        **BP-04 WARNING:** This heuristic is 20–40% inaccurate on code/JSON/CJK
+        content. Spend guard applies a 50% safety buffer to compensate.
+        Consider implementing exact tokenization via Ollama or Hugging Face
+        tokenizers in future iterations.
 
         Args:
             messages: Messages whose combined token count to estimate.

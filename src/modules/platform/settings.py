@@ -67,6 +67,9 @@ class OneStopSettings(Settings):
     spend_cap_day_usd: float = Field(default=1.0, ge=0.0)
     spend_cap_month_usd: float = Field(default=10.0, ge=0.0)
 
+    # -- Application URL (used for CORS in production) ---------------------
+    app_url: str | None = None
+
     # -- Observability -----------------------------------------------------
     sentry_dsn: SecretStr | None = None
 
