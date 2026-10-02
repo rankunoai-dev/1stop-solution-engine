@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -37,8 +38,12 @@ from enum import Enum
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from src.core.config import Environment
 from src.modules.platform.jobs import enqueue
+from src.modules.platform.settings import get_onestop_settings
 from src.modules.platform.tables import t_login_codes, t_sessions, t_users
+
+_logger = logging.getLogger(__name__)
 
 __all__ = [
     "UserRow",
@@ -134,11 +139,21 @@ async def request_login_code(conn: AsyncConnection, email: str) -> None:
             expires_at=expires_at,
         )
     )
-    await enqueue(
-        conn,
-        "send_login_email",
-        {"email": email, "code": code},
-    )
+    if get_onestop_settings().environment is Environment.DEVELOPMENT:
+        # In development there is no SMTP configured; print the code so the
+        # owner can log in without email.  Never do this in production.
+        _logger.warning(
+            "\n\n  *** DEV – login code for %s: %s  (expires in %d min) ***\n",
+            email,
+            code,
+            _OTP_EXPIRY_MINUTES,
+        )
+    else:
+        await enqueue(
+            conn,
+            "send_login_email",
+            {"email": email, "code": code},
+        )
 
 
 async def verify_login_code(

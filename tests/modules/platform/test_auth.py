@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -147,8 +147,31 @@ class TestRequestLoginCode:
         await request_login_code(conn, "inactive@example.com")
         conn.execute.assert_awaited_once()
 
-    async def test_inserts_and_enqueues_for_active_user(self):
-        """For an active user, one SELECT + one INSERT + one enqueue execute."""
+    async def test_dev_mode_logs_code_without_enqueue(self) -> None:
+        """In development the code is logged; no job row is inserted."""
+        from src.core.config import Environment
+
+        conn = AsyncMock(spec=AsyncConnection)
+        sel_result = MagicMock()
+        sel_result.mappings.return_value.fetchone.return_value = {
+            "id": uuid.uuid4(),
+            "is_active": True,
+        }
+        insert_result = MagicMock()
+        conn.execute.side_effect = [sel_result, insert_result]
+
+        dev_settings = MagicMock()
+        dev_settings.environment = Environment.DEVELOPMENT
+        with patch("src.modules.platform.auth.get_onestop_settings", return_value=dev_settings):
+            await request_login_code(conn, "active@example.com")
+
+        # SELECT + INSERT login_code only — no job enqueue.
+        assert conn.execute.call_count == 2
+
+    async def test_prod_mode_enqueues_email_job(self) -> None:
+        """In production the code is enqueued as send_login_email."""
+        from src.core.config import Environment
+
         conn = AsyncMock(spec=AsyncConnection)
         sel_result = MagicMock()
         sel_result.mappings.return_value.fetchone.return_value = {
@@ -159,7 +182,11 @@ class TestRequestLoginCode:
         insert_result.scalar_one.return_value = uuid.uuid4()
         conn.execute.side_effect = [sel_result, insert_result, insert_result]
 
-        await request_login_code(conn, "active@example.com")
+        prod_settings = MagicMock()
+        prod_settings.environment = Environment.PRODUCTION
+        with patch("src.modules.platform.auth.get_onestop_settings", return_value=prod_settings):
+            await request_login_code(conn, "active@example.com")
+
         # SELECT + INSERT login_code + INSERT job = 3 calls.
         assert conn.execute.call_count == 3
 
