@@ -15,7 +15,7 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | :-- | :-- |
 | **SDLC step** | Gate G2 **approved 2026-10-01** ([ADR 0000](docs/adr/0000-architecture-approval.md)); Step 6 implementation of R0 in progress |
 | **Phase** | Architecture and R0/R1 plan drafted (2026-10-01). Investigation compressed by owner decision: remaining spikes run as early build slices. |
-| **Code** | Slices R0.1–R0.6 implemented and verified. |
+| **Code** | Slices R0.1–R0.8 implemented and verified. |
 | **Approved architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | **Approver** | AI Lead (all gates during testing) |
 | **Last updated** | 2026-10-01 (R0.4) |
@@ -32,6 +32,8 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | Database layer: Alembic migration 0001 creates the `onestop` schema with 11 platform tables (spaces, users, login_codes, sessions, llm_calls, jobs, schedules, rate_limits, email_deliveries, audit_log, settings_kv); SQLAlchemy async engine (`psycopg3`) with `transaction()` helper; Docker Compose dev environment; 111 unit tests passing, 95% coverage | R0.4 |
 | Audit logging (`audit.record`) and fixed-window rate limiting (`rate_limit.check_and_increment`): append-only `audit_log` insert with optional actor and JSONB detail; atomic `INSERT ... ON CONFLICT DO UPDATE` counter with epoch-aligned windows; 123 tests, 95% coverage | R0.5 |
 | LLM pricing table (`src/integrations/llm/pricing.py`) and persisted spend guard (`PersistedSpendGuard`): USD-per-MTok price table for Anthropic/Gemini/Ollama; `reserve()` acquires a Postgres advisory lock then checks day/month caps and a runtime kill switch (`settings_kv`); `record()` inserts into `llm_calls`; `CapExceededError` carries the reason; 155 tests, 95% coverage | R0.6 |
+| Async job queue (`jobs.py`), scheduler (`scheduler.py`), and worker loop (`worker.py`): `enqueue` with idempotency, `claim` using `FOR UPDATE SKIP LOCKED` with stale-lock recovery, `complete`/`fail` with exponential backoff and `dead` terminal state; `scheduler.tick` enqueues due schedules once per period; `WorkerLoop` dispatches to registered handlers; 177 tests, 94% coverage | R0.7 |
+| Email integration (`EmailMessage`, `GmailSMTPSender`) and idempotent mailer (`mailer.send`): STARTTLS on port 587 with app password; 3-attempt retry on `SMTPException`; Gmail hourly rate-limit check via `check_and_increment`; delivery tracked in `email_deliveries` with idempotency key (ON CONFLICT); `login_code` and `spend_alert` templates; `DeliveryError` persists failures to the DB; 205 tests, 95% coverage | R0.8 |
 
 Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 
