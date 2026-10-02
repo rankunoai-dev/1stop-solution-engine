@@ -45,6 +45,11 @@ Every consequential design choice is recorded here while it is open. Once it is 
 | D-27 | Access isolation | PROPOSED | App-level `space_id`/`restricted` checks now; Postgres RLS when a second space appears | P3 |
 | D-28 | Cost posture | **DECIDED** 2026-09-30, extended 2026-10-01 | Minimum spend; costs kept low throughout initial development; caps proposed: $1/day and $10/month LLM (awaiting owner's numbers, Q-L07) | Owner |
 | D-29 | Tool ownership model | **DECIDED** 2026-09-30 | Author needed only for the onboarding handover; maintainer (default: admin) afterwards | Owner |
+| D-30 | Partial-match threshold for the DIY bridge | PROPOSED | Offer the DIY pathway at 40–80% match; below 40% = honest "no match"; above 80% = use it as-is | — |
+| D-31 | Adaptability classifier — what counts as "bridgeable" | PROPOSED | LLM judge call (purpose=`judge`) with a rubric: only prompt/config changes, no new integrations, structural code changes capped at ~10 lines | — |
+| D-32 | Prompt card structure | PROPOSED | Five-section card: Context → Gap → What NOT to touch (guardrails + security) → The ask → Verification checklist | — |
+| D-33 | Upload-back mechanism | PROPOSED | Start with file upload to a `/api/v1/tools/evaluate` endpoint; GitHub link import added later (R3) | — |
+| D-34 | Installation/run guide for full matches | PROPOSED | Template-first (OS steps, Docker, Claude Code import); LLM-expanded only if the template can't cover the tool's requirements | — |
 
 ---
 
@@ -161,6 +166,75 @@ Every consequential design choice is recorded here while it is open. Once it is 
   3a. **Owner direction (2026-10-01):** costs must stay low throughout initial development. So: the cheapest passing model by default; eval runs use small golden-set subsets except before a gate; card drafting runs once per tool; and no paid component is added during development without a recorded reason.
   4. Spike budget for the whole investigation: ≤ $15 (was ~$120).
   5. Don't save on secret scanning, tests, evaluation or backups; they cost time, not money.
+
+### D-30 Partial-match threshold for the DIY bridge
+- **Context (owner, 2026-10-01):** When the best-matching tool only partially solves a user's problem, the engine should decide whether a non-technical person can close the gap themselves rather than giving up.
+- **Three outcome states:**
+  1. **Match score > 80%** → "Use it as-is" pathway; provide an installation/run guide (D-34).
+  2. **Match score 40–80%** → "DIY bridge" pathway; judge adaptability (D-31), then generate a prompt card (D-32) and end-to-end guidance in the chat window.
+  3. **Match score < 40%** → Honest no-match: "No RankUno tool solves this right now"; surface the gap to the maintainer (D-25).
+- **Evidence needed:** The thresholds 40% and 80% are initial guesses; the golden-set evaluation in R1.10 will tell us the real score distribution so we can set these empirically. Record calibrated values in this entry once S-05 data exists.
+
+### D-31 Adaptability classifier — what counts as "bridgeable"
+- **Context:** Not every gap is closable by a non-technical person. The engine must judge before offering the DIY pathway, to avoid setting people up to fail.
+- **Proposed rubric (one LLM `judge` call):**
+  - BRIDGEABLE if: the gap is one prompt string, one config value, one flag, or one small input/output format change (≤ ~10 lines of code equivalent).
+  - NOT BRIDGEABLE if: the gap requires a new integration, a new dependency, an API key the user doesn't have, or structural code changes beyond the rubric.
+- **Output:** `{bridgeable: bool, complexity: "prompt_only" | "config" | "code_small" | "too_complex", plain_english_explanation: str}`.
+- **Cost:** one `judge`-purpose LLM call per partial-match question. Acceptable because partial matches are less frequent than exact answers.
+
+### D-32 Prompt card structure
+- **Context:** The generated prompt card is what the user takes to Claude Code or another AI tool with the existing tool's code. It must be strong enough that a non-technical person does not accidentally break the tool or introduce security issues.
+- **Proposed five-section card:**
+  1. **Context block** — what the tool currently does (2–3 sentences, from the tool card).
+  2. **Gap block** — what the user needs and how the tool currently falls short (from the match gap analysis).
+  3. **Guardrails block** — explicit "DO NOT" list: do not change existing auth flows; do not add third-party API calls; do not rename public-facing commands or flags; do not remove existing tests. This section is always present and never summarised.
+  4. **The ask** — a single, concrete, minimal request: "Add a `--max-lines` flag to the existing CLI command that truncates output."
+  5. **Verification checklist** — how to confirm it worked without running a full test suite (e.g., run `python tool.py --help` and confirm the new flag appears).
+- **Design principle:** the prompt card is a contract, not a conversation. It is generated once and handed to the user intact; the user must not be asked to edit it.
+- **LLM purpose:** `card_draft` (already in `llm_calls.purpose` constraint).
+
+### D-33 Upload-back mechanism
+- **Context:** After the user modifies a tool with the prompt card, they should be able to return it to 1Stop for re-evaluation, creating a closed loop: "Did I fix my original problem?"
+
+**How the re-evaluation works (owner clarification 2026-10-02):**
+
+Running the full modified source through an LLM would cost $0.05–$0.50 per upload and is unreliable. Instead, the re-evaluation operates on **declared capabilities** — the same signal the original retrieval used — extracted statically from the modified tool:
+
+| File | What we extract | Cost |
+| :-- | :-- | :-- |
+| `README.md` / `README.rst` | What the tool says it does | 0 |
+| `1stop.yaml` (if present) | Structured capability declaration | 0 |
+| CLI flag definitions (argparse/click/typer) | AST parse only, no execution | 0 |
+| OpenAPI spec (if present) | Endpoint + description list | 0 |
+
+Total extracted text: < 1000 tokens.  Then:
+1. **Embed** the extracted description (local model, free).
+2. **Re-run hybrid search** — compare the new embedding against the user's original query embedding (same pipeline as the original search).
+3. **Optional `judge` call** (< 200 tokens, ~$0.0001): "Does this capability description solve the original problem? Yes/No + confidence."
+
+The score that comes back is the re-evaluation score.
+
+- **Proposed flow:**
+  1. User uploads the modified file (or a zip) to `POST /api/v1/tools/evaluate`.
+  2. A `jobs` record is created (kind=`evaluate_uploaded_tool`, payload includes the original problem statement and query embedding).
+  3. The worker extracts capability text (README, AST parse of CLI flags), embeds it, re-runs the match score.
+  4. The result is shown in the chat window: "Your modified tool now matches X% of your requirement."
+  5. If score > 80%, offer to formally ingest the tool into the knowledge base (admin approval required).
+- **Security requirements** — the upload endpoint must:
+  - Accept only specific file extensions (`.py`, `.ts`, `.js`, `.md`, `.yaml`, `.json`, `.zip`).
+  - Never execute uploaded code; use `ast.parse()` for Python and text grep for others — parse only.
+  - Store files in a temp directory isolated from the source tree; delete after the job completes or after 1 hour.
+  - Rate limit: 3 evaluations per user per day (enforced via `rate_limits` table, R2.5).
+- **Later (R3):** Accept a GitHub repository URL instead of a file upload.
+
+### D-34 Installation/run guide for full matches
+- **Context:** Even when a tool is a perfect match, a non-technical user may not know how to run it. The response should include a complete, OS-aware, end-to-end guide.
+- **Proposed approach:** Template-first, LLM-expanded.
+  - The tool card's `stack` and `entry_points` fields (from R1.11) drive a template: "This tool runs with Python 3.11+. Steps: 1) Install Python… 2) Open a terminal… 3) Run `python tool.py …`"
+  - If the tool card also says it runs inside Claude Code (CLAUDE.md detected), add: "In Claude Code: open the folder, run `/import`, then …"
+  - If the template doesn't cover the tool's requirements (non-standard stack, Docker, unusual setup), one `card_draft`-purpose LLM call fills the gaps.
+- **Tone guidance:** step-by-step, numbered, no assumed knowledge. Every step is one action. The guide ends with a "you should see:" verification line.
 
 ### D-29 Tool ownership model — DECIDED
 - **Decision (owner, 2026-09-30):** Once a tool is onboarded, its original owner is not needed.
