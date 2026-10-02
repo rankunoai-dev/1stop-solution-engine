@@ -193,6 +193,9 @@ Every consequential design choice is recorded here while it is open. Once it is 
   5. **Verification checklist** — how to confirm it worked without running a full test suite (e.g., run `python tool.py --help` and confirm the new flag appears).
 - **Design principle:** the prompt card is a contract, not a conversation. It is generated once and handed to the user intact; the user must not be asked to edit it.
 - **LLM purpose:** `card_draft` (already in `llm_calls.purpose` constraint).
+- **Documentation requirement (owner direction, 2026-10-02):** The card's Verification checklist section must always end with a documentation step:
+  > "6. Update (or create) `README.md` in the tool's root folder with one paragraph describing what the tool now does — including the change you just made. If a `1stop.yaml` file exists, update the `capabilities` list to reflect the new feature. Include both files in the zip or folder when you upload the modified tool back to 1Stop."
+  This requirement exists so that re-evaluation (D-33) has fresh capability declarations to compare against, rather than stale or missing docs. Without it, the static extractor would read the old README and score the modification as unchanged.
 
 ### D-33 Upload-back mechanism
 - **Context:** After the user modifies a tool with the prompt card, they should be able to return it to 1Stop for re-evaluation, creating a closed loop: "Did I fix my original problem?"
