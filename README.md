@@ -15,10 +15,10 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | :-- | :-- |
 | **SDLC step** | Gate G2 **approved 2026-10-01** ([ADR 0000](docs/adr/0000-architecture-approval.md)); Step 6 implementation of R0 in progress |
 | **Phase** | Architecture and R0/R1 plan drafted (2026-10-01). Investigation compressed by owner decision: remaining spikes run as early build slices. |
-| **Code** | Slices R0.1–R0.8 implemented and verified. |
+| **Code** | Slices R0.1–R0.13 implemented and verified. |
 | **Approved architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | **Approver** | AI Lead (all gates during testing) |
-| **Last updated** | 2026-10-01 (R0.4) |
+| **Last updated** | 2026-10-02 (R0.13) |
 
 ## What works today
 
@@ -34,6 +34,11 @@ Internal first, minimum spend. Full framing: [PROBLEM_STATEMENT.md](PROBLEM_STAT
 | LLM pricing table (`src/integrations/llm/pricing.py`) and persisted spend guard (`PersistedSpendGuard`): USD-per-MTok price table for Anthropic/Gemini/Ollama; `reserve()` acquires a Postgres advisory lock then checks day/month caps and a runtime kill switch (`settings_kv`); `record()` inserts into `llm_calls`; `CapExceededError` carries the reason; 155 tests, 95% coverage | R0.6 |
 | Async job queue (`jobs.py`), scheduler (`scheduler.py`), and worker loop (`worker.py`): `enqueue` with idempotency, `claim` using `FOR UPDATE SKIP LOCKED` with stale-lock recovery, `complete`/`fail` with exponential backoff and `dead` terminal state; `scheduler.tick` enqueues due schedules once per period; `WorkerLoop` dispatches to registered handlers; 177 tests, 94% coverage | R0.7 |
 | Email integration (`EmailMessage`, `GmailSMTPSender`) and idempotent mailer (`mailer.send`): STARTTLS on port 587 with app password; 3-attempt retry on `SMTPException`; Gmail hourly rate-limit check via `check_and_increment`; delivery tracked in `email_deliveries` with idempotency key (ON CONFLICT); `login_code` and `spend_alert` templates; `DeliveryError` persists failures to the DB; 205 tests, 95% coverage | R0.8 |
+| Authentication & user management (`src/modules/platform/auth.py`, `src/modules/api/`): 6-digit OTP login codes with SHA-256 hashing, atomic attempt-counter guard (max 5), server-side sessions (raw token in cookie, hash in DB), CSRF tokens (HMAC-SHA256 bound to session), `bootstrap_admin` idempotent seeding; FastAPI app factory with lifespan; `current_user`/`require_admin`/`verify_csrf` deps; auth routes (`/api/v1/auth/request-code`, `/verify-code`, `/logout`, `/me`) with per-email/per-IP rate limiting; admin user routes (`/api/v1/admin/users` GET/POST/PATCH) with last-admin and self-deactivation guards; migration 0002 adds nullable `session_id` FK to `llm_calls`; 229 unit tests, 87% coverage | R0.9 |
+| LLM provider abstraction (`LLMProvider` Protocol, `OllamaAdapter` streaming via NDJSON, `AnswerLLMTool` wired to the spend guard): providers swappable behind one interface; Ollama $0; paid providers (Haiku 4.5 / Gemini Flash) added in R1; 273 unit tests, 87% coverage | R0.10 |
+| SSE chat endpoint (`POST /api/v1/chat`) streams token events via `AnswerLLMTool`; admin spend routes (daily breakdown `GET /api/v1/admin/spend` + kill switch `POST /api/v1/admin/spend/kill-switch`); admin job queue routes (`GET /api/v1/admin/jobs`, `POST /api/v1/admin/jobs/{id}/retry`); `GET /health`; CORS middleware; global exception handler; CLI (`onestop serve|migrate|worker|sync-now`); pre-existing OllamaAdapter `validate_model` bug fixed (closed client); settings cache isolated in test fixture; 306 unit tests, 85.49% coverage | R0.11 |
+| React + Vite + TypeScript SPA (`web/`): Login (OTP two-step flow), Chat (SSE streaming token-by-token), Admin (Users table with create/deactivate/role-change, Spend with SVG bar chart and kill-switch toggle, Jobs with polling and retry); Vitest tests for SSE parser, auth flow and SSE hook; `npm run build` produces `dist/` | R0.12 |
+| `Dockerfile` (multi-stage Node→Python build), `railway.json` (deploy to Railway with migration-on-start), `docs/DEPLOY.md` (setup guide); FastAPI serves the SPA from `web/dist/` | R0.13 |
 
 Nothing user-facing runs yet. This section lists only what works (SDLC Step 8).
 

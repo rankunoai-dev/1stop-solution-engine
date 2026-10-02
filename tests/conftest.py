@@ -32,6 +32,7 @@ from src.core.rate_limiter import CostLedger
 from src.core.registry import registry
 from src.core.schemas import RiskClass, ToolMetadata
 from src.modules.platform.db import reset_engine
+from src.modules.platform.settings import reset_onestop_settings
 
 # ---------------------------------------------------------------------------
 # Default TEST_DATABASE_URL for the local Docker Compose database.
@@ -44,8 +45,10 @@ _DEFAULT_TEST_DB_URL = "postgresql+psycopg://onestop:onestop_dev@localhost:5432/
 def _isolate_settings_cache() -> Iterator[None]:
     """Clear the settings singleton around every test."""
     reset_settings_cache()
+    reset_onestop_settings()
     yield
     reset_settings_cache()
+    reset_onestop_settings()
 
 
 @pytest.fixture(autouse=True)

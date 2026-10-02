@@ -21,7 +21,17 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0",
     "psycopg[binary]>=3.1",
     "alembic>=1.13",
+    # R0.9 – API layer
+    "fastapi>=0.111,<1.0",
+    # R0.10 – LLM provider (OllamaAdapter uses httpx at runtime)
+    "httpx>=0.27",
+    # R0.11 – CLI and ASGI server
+    "click>=8.1",
+    "uvicorn[standard]>=0.29",
 ]
+
+[project.scripts]
+onestop = "src.cli:cli"
 
 [project.optional-dependencies]
 dev = [
@@ -33,6 +43,10 @@ dev = [
     "mypy==2.3.1",
     "import-linter>=2.1",
     "pre-commit>=3.7",
+    # R0.9 – API testing
+    "python-multipart>=0.0.9",
+    # R0.10 – HTTP mock for OllamaAdapter tests
+    "respx>=0.20",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -63,6 +77,9 @@ ignore = ["D203", "D213", "ANN401"]
 # Tests document themselves through their names; docstring and annotation
 # rules are relaxed there (as in prompt-engine).
 "tests/**" = ["S101", "S105", "S106", "D", "ANN"]
+# FastAPI dependency injection uses Depends() as a default argument value,
+# which is the intended pattern; B008 is suppressed for the API module.
+"src/modules/api/**" = ["B008"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

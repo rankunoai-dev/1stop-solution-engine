@@ -36,7 +36,7 @@ Every consequential design choice is recorded here while it is open. Once it is 
 | D-18 | Hosting | PROPOSED | One Railway service + Supabase free + Cloudflare; no Upstash in release 1 | P10 |
 | D-19 | Jobs and scheduling | PROPOSED | In-process scheduler + Postgres job table (no Celery/broker) | P10 |
 | D-20 | Email channel | **DECIDED for testing** | Test Gmail SMTP now; Microsoft 365 (Graph) later, behind one interface | Owner |
-| D-21 | Staff sign-in | **DECIDED (staged)** | Allowlisted email login while testing; Microsoft Entra ID before rollout | Owner |
+| D-21 | Staff sign-in | **DECIDED (staged)** | Allowlisted email login while testing; Microsoft Entra ID before rollout — OTP+session layer implemented in R0.9 | Owner |
 | D-22 | LLM observability | PROPOSED | Postgres `llm_trace` table + Sentry free | P10 |
 | D-23 | Conversation retention | PROPOSED | 180 days content, aggregates kept; confirm with owner | P9 |
 | D-24 | Web-search fallback | PROPOSED | Off | P6 |
@@ -184,18 +184,62 @@ Every consequential design choice is recorded here while it is open. Once it is 
 - **Cost:** one `judge`-purpose LLM call per partial-match question. Acceptable because partial matches are less frequent than exact answers.
 
 ### D-32 Prompt card structure
-- **Context:** The generated prompt card is what the user takes to Claude Code or another AI tool with the existing tool's code. It must be strong enough that a non-technical person does not accidentally break the tool or introduce security issues.
-- **Proposed five-section card:**
-  1. **Context block** — what the tool currently does (2–3 sentences, from the tool card).
-  2. **Gap block** — what the user needs and how the tool currently falls short (from the match gap analysis).
-  3. **Guardrails block** — explicit "DO NOT" list: do not change existing auth flows; do not add third-party API calls; do not rename public-facing commands or flags; do not remove existing tests. This section is always present and never summarised.
-  4. **The ask** — a single, concrete, minimal request: "Add a `--max-lines` flag to the existing CLI command that truncates output."
-  5. **Verification checklist** — how to confirm it worked without running a full test suite (e.g., run `python tool.py --help` and confirm the new flag appears).
-- **Design principle:** the prompt card is a contract, not a conversation. It is generated once and handed to the user intact; the user must not be asked to edit it.
+- **Context:** The generated prompt card is what the user takes to Claude Code (or any AI tool) together with the existing tool's files. It has two audiences: (1) the person physically moving the files who may have no interest in what is inside them, and (2) the AI that will actually read and act on the content. The card must serve both without either audience having to ask for clarification.
+
+**Design principles (updated owner direction, 2026-10-02):**
+- The card is a contract, not a conversation. It is generated once and handed to the user intact; neither the user nor the AI should need to ask for clarification.
+- **No IDE Required:** Non-technical analysts do NOT need to install or know how to use an IDE (like VS Code or CLI tools). The workflow works entirely inside **Claude Web Chat / Claude Cowork** (browser-based) by uploading `.zip` or `SKILL.md` files directly.
+- The AI-facing sections include embedded self-chaining checkpoints — prompts the AI generates *for itself* at each stage of its work. The engine generates these checkpoints specifically for the tool and change at hand (not generic advice), so the AI reasons correctly without a human steering it mid-task.
+- The analyst-facing section (Part A) uses only plain, polite action words: "go to", "download", "open", "attach", "copy", "paste", "wait", "save", "zip", "upload". No word that requires knowing what the tool does.
+
+**Two-part structure:**
+
+**PART A — Steps for the person handling this today (No IDE or coding needed)**
+_(This is the only section the person moving the files needs to read. Works in Claude Web Chat, Claude Cowork, or Claude Code CLI.)_
+
+Numbered steps, generated specifically for the tool (file name, folder structure, upload destination filled in by the engine):
+
+  1. Go to [tool download link or folder path the engine fills in]. Download the `.zip` file or `SKILL.md` document to your computer (e.g. your Desktop).
+  2. Open **Claude Web Chat** (claude.ai), **Claude Cowork**, or your preferred AI chat assistant in your browser.
+  3. Click the paperclip / attachment icon and upload the `.zip` or `SKILL.md` file you downloaded in Step 1.
+  4. Copy everything inside the box labelled **PART B** below — from the first line to the last — and paste it into the chat message box. Do not add or remove anything.
+  5. Press Enter and wait for the AI to process your request and generate the updated tool files / `.zip`. This usually takes 1–3 minutes.
+  6. Download the updated `.zip` file or modified files provided by the AI back to your computer.
+  7. Go to [1Stop upload page URL the engine fills in]. Click "Upload modified tool." Drag your modified `.zip` file into the upload area (or click "Choose file" and find it). Click "Submit."
+  8. Wait for the score to appear. If the bar turns green and says 80% or above, your work here is done! If it is below 80%, a message will tell you what to do next.
+
+**PART B — Paste this into Claude Web Chat / Claude Cowork / AI Assistant (do not change anything below this line)**
+_(The person handling this does not need to read or understand Part B.)_
+
+  1. **Tool snapshot** — what the tool currently does, which files belong to it, and which file is the main entry point. Generated from the tool card (2–4 sentences). Gives the AI a grounded starting point before it reads any code.
+
+  2. **What needs to change** — the single, concrete, minimal ask. One sentence: what feature or behaviour is missing and exactly what form the addition should take. Combined with the gap analysis (how the tool currently falls short). Example: "Add a `--max-lines N` flag to the existing `run` command so it stops printing after N lines; N must be a positive integer; default is unlimited."
+
+  3. **Boundaries — what must not move** — the explicit DO NOT list, always present and never condensed:
+     - Do not change any existing authentication or login flow.
+     - Do not add calls to any outside service or API that is not already in the code.
+     - Do not rename or remove any existing command, flag, or setting that users already rely on.
+     - Do not delete or weaken any existing test.
+     - Do not add dependencies that require a paid licence.
+     - *(Engine appends tool-specific rules here based on the tool card's `guardrails` field.)*
+
+  4. **Your own reasoning checkpoints** — self-chaining prompts the AI must work through before touching any file:
+     - *Before starting:* "Which files do I need to read first to understand the current structure? Name them, then read them before writing a single line."
+     - *After reading:* "Write the change in one sentence. Does it stay within all the boundaries above? If not, stop and say why."
+     - *While implementing:* "After each file I edit, ask: have I introduced anything the boundaries forbid? If yes, revert that file and find a different path."
+     - *Before declaring done:* "Go through the verification items in section 5 one by one. If any item fails, fix it before finishing."
+     - *(Engine replaces the italic text above with tool-specific versions: e.g., "Which files do I need to read first?" becomes "Read `src/cli.py`, `src/runner.py`, and `README.md` before making any changes." The engine generates these from the tool card's file list and the ask.)*
+
+  5. **How to know it worked** — the verification checklist the AI must pass before finishing:
+     - *(Engine generates 3–5 concrete, runnable checks specific to the ask. Example:* `python tool.py run --max-lines 5` *outputs exactly 5 lines and exits without error.)*
+     - Each check is one command or one observation. No check requires building a full test suite.
+
+  6. **Update the docs** — always the final step, never optional:
+     > "Open `README.md` in the tool's root folder. Add or update one paragraph that describes what the tool now does, including the change you just made. If a file named `1stop.yaml` exists, add the new capability to the `capabilities` list. Save both files. They must be present in the folder before the zip in Part A Step 7 is created."
+     This step is non-negotiable. Without updated docs, the re-evaluation in D-33 reads stale capability declarations and gives an incorrect score.
+
 - **LLM purpose:** `card_draft` (already in `llm_calls.purpose` constraint).
-- **Documentation requirement (owner direction, 2026-10-02):** The card's Verification checklist section must always end with a documentation step:
-  > "6. Update (or create) `README.md` in the tool's root folder with one paragraph describing what the tool now does — including the change you just made. If a `1stop.yaml` file exists, update the `capabilities` list to reflect the new feature. Include both files in the zip or folder when you upload the modified tool back to 1Stop."
-  This requirement exists so that re-evaluation (D-33) has fresh capability declarations to compare against, rather than stale or missing docs. Without it, the static extractor would read the old README and score the modification as unchanged.
+- **Engine generation note:** The engine fills in all italicised and bracketed placeholders when generating the card. The final card delivered to the user contains no placeholders — every instruction is specific to the exact tool and change. Part A step numbers and Part B checkpoint text are generated together in the same `card_draft` call so they are consistent.
 
 ### D-33 Upload-back mechanism
 - **Context:** After the user modifies a tool with the prompt card, they should be able to return it to 1Stop for re-evaluation, creating a closed loop: "Did I fix my original problem?"
