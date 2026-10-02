@@ -23,6 +23,8 @@ dependencies = [
     "alembic>=1.13",
     # R0.9 – API layer
     "fastapi>=0.111,<1.0",
+    # R0.10 – LLM provider (OllamaAdapter uses httpx at runtime)
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +38,9 @@ dev = [
     "import-linter>=2.1",
     "pre-commit>=3.7",
     # R0.9 – API testing
-    "httpx>=0.27",
     "python-multipart>=0.0.9",
+    # R0.10 – HTTP mock for OllamaAdapter tests
+    "respx>=0.20",
 ]
 
 [tool.hatch.build.targets.wheel]
