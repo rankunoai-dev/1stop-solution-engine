@@ -285,18 +285,134 @@ README "what works" and run instructions; ARCHITECTURE updated to as-built; ADRs
 
 ---
 
-## 4. Order and estimate
+## 4. R2 — Guided Adaptation Pathway (owner direction 2026-10-01)
+
+**Goal:** the engine does not just return a search result — it decides what to do with a partial match and gives the user a complete, safe path to close the gap themselves.
+
+**Decisions this release implements:** D-30, D-31, D-32, D-33, D-34.
+
+---
+
+### R2.1 Match quality signal
+
+Expose the RRF score from the retrieval pipeline as a normalised confidence percentage. Tag every answer with one of three states:
+
+| State | Score range | Next action |
+| :-- | :-- | :-- |
+| `full_match` | > 80% | Installation/run guide (R2.4) |
+| `partial_match` | 40–80% | Adaptability judgment → DIY bridge (R2.2 / R2.3) |
+| `no_match` | < 40% | Honest "no tool" + gap logged for maintainer (D-25) |
+
+Thresholds are configurable in `settings_kv` so they can be tuned from the admin UI once real data exists.
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/retrieval/confidence.py` | `score_to_state(rrf_score) -> MatchState` with configurable thresholds from `settings_kv` |
+| `src/modules/assistant/answer.py` | Extended: after retrieval, compute `MatchState`; route to the correct pathway |
+| Tests | Threshold boundaries; configurable overrides from `settings_kv`; partial-match routing |
+
+---
+
+### R2.2 Adaptability classifier (D-31)
+
+A single `judge`-purpose LLM call that decides whether a non-technical person can close the gap.
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/assistant/prompts/adaptability_judge_v1.md` | Versioned system + user prompt with the bridgeability rubric |
+| `src/modules/assistant/adaptability.py` | `AdaptabilityResult` model; `AdaptabilityJudge(BaseTool, FINANCIAL)`; structured output: `bridgeable bool`, `complexity`, `plain_explanation` |
+| Tests | BRIDGEABLE cases (single flag, prompt change); NOT_BRIDGEABLE cases (new integration, new API key); malformed LLM output raises `ToolError`; cap reached returns `cap_reached` cleanly |
+
+---
+
+### R2.3 Prompt card generator and DIY guide (D-32)
+
+The five-section card generated when the gap is bridgeable. Delivered in the chat window alongside step-by-step opening instructions.
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/assistant/prompts/card_draft_v1.md` | System prompt for the `card_draft` LLM call; five-section schema enforced in the prompt |
+| `src/modules/assistant/card_generator.py` | `PromptCard` model (context, gap, guardrails, ask, verification); `PromptCardGenerator(BaseTool, FINANCIAL)`; schema-validated output |
+| `src/modules/assistant/diytool_guide.py` | Composes the full chat response: reassurance paragraph → "here is the closest tool" → gap summary → step-by-step Claude Code import instructions → the prompt card → upload-back invite |
+| `src/modules/assistant/prompts/diy_response_v1.md` | Persona + tone guidance for the DIY response (reassuring, step-by-step, no jargon) |
+| Tests | Generated card always has all five sections; guardrails section always present and non-empty; card does not contain "here's how to add a new API key" (would be NOT_BRIDGEABLE); full chat response contains the import steps |
+
+**Claude Code import instructions** (the step-by-step section):
+
+```
+1. Open Claude Code (terminal: `claude` or via the desktop app).
+2. In a new terminal, run: claude /import <path-to-tool-folder>
+3. When Claude opens, paste the prompt card below.
+4. Claude will propose changes — review them before accepting.
+5. When done, use the Upload tab above to send your modified tool back for re-evaluation.
+```
+
+---
+
+### R2.4 Installation/run guide for full matches (D-34)
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/assistant/run_guide.py` | `RunGuide` model; `RunGuideGenerator`: template-driven from `tool_card.stack` and `tool_card.entry_points`; LLM expansion (`card_draft`) only if the template can't cover the stack |
+| `src/modules/assistant/prompts/run_guide_templates/` | One Markdown template per recognised stack: `python_cli.md`, `node_cli.md`, `docker.md`, `claude_code.md`, `unknown.md` |
+| Tests | Python CLI tool → uses template, no LLM call; unknown stack → LLM call fires once; guide always ends with a "you should see:" line |
+
+---
+
+### R2.5 Upload-back evaluation endpoint (D-33)
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/api/routes_evaluate.py` | `POST /api/v1/tools/evaluate`: auth, rate limit (3/user/day), file-extension allowlist, temp storage, enqueue `evaluate_uploaded_tool` job |
+| `src/modules/catalog/upload_evaluator.py` | Job handler: static analysis of uploaded code (grep-based capability extraction, no execution); re-runs match evaluation against the user's original problem statement; returns match state + score |
+| `web/src/components/UploadForEvaluation.tsx` | File-drop in the chat window; progress indicator; result display ("Your modified tool now matches 88%"); offer to ingest if score > 80% |
+| Tests | Disallowed extension → rejected before enqueue; file not executed (no subprocess, no import); evaluation re-uses the retrieval pipeline; score > 80% returns ingest offer; rate limit blocks the 4th upload |
+
+**Security requirements for R2.5** (enforced, not optional):
+- Uploaded files are written to a temp directory isolated from the source tree; deleted on job completion or after 1 hour, whichever is first.
+- The evaluator uses `ast.parse()` for Python and `acorn` (no-eval) for JavaScript — parse only, never `exec`/`eval`.
+- The ingest offer is an admin-approval job, not automatic; a staff user cannot directly add to the knowledge base.
+
+---
+
+### R2.6 Admin panel: adaptation insights
+
+| File | Content |
+| :-- | :-- |
+| `src/modules/api/routes_admin_adaptations.py` | Aggregated counts: partial-match questions per week, bridgeable vs. not, upload-back count, score improvements |
+| `web/src/pages/admin/Adaptations.tsx` | Simple chart; table of uploaded tools awaiting admin review for ingest |
+
+---
+
+### R2.7 Docs drift and R2 review
+
+README "what works"; ARCHITECTURE updated for the three answer pathways; ADRs for D-30–D-34; red-team check on the upload endpoint; risk register refreshed (R-xx for user-uploaded code execution surface).
+
+**R2 exit criteria**
+- [ ] Partial-match questions in the golden set route to the correct pathway (no manual labelling needed: thresholds validated on real data from R1.10).
+- [ ] Generated prompt card always contains all five sections; guardrails section non-empty.
+- [ ] Upload-back endpoint: no execution path reachable; rejected extension returns 400; static analysis returns a score.
+- [ ] Full-match answers include a run guide with at least one concrete terminal command.
+- [ ] Spend for R2 ≤ $3 (judge + card_draft calls are the only additions); within the caps.
+
+---
+
+## 5. Order and estimate
 
 ```
 R0.1 → R0.2 → R0.3 → R0.4 → R0.5 → R0.6 → R0.7 → R0.8 → R0.9 → R0.10 → R0.11 → R0.12 → R0.13
                                                                                             │
 R1.1 → R1.5 → R1.6 → R1.7 → R1.3 → R1.4 → R1.8 → R1.9 → R1.10 → R1.12 → R1.13 → R1.11 → R1.14 → R1.15
-              (R1.2 slots in whenever the Drive folder is shared)
+              (R1.2 slots in whenever the Drive folder is shared)                                     │
+                                                                                                     R2.1 → R2.2 → R2.3 → R2.4 → R2.5 → R2.6 → R2.7
 ```
 
 | Release | Slices | Estimate (one person, ~70%) |
 | :-- | :-- | :-- |
 | R0 | 13 | ~2 weeks |
 | R1 | 15 | ~3 weeks |
+| R2 | 7 | ~1.5 weeks |
 
 The parsing, chunking and retrieval slices (R1.5–R1.7, R1.9) work on fixtures, so they don't wait for the GitHub token or the Drive share.
+
+R2 depends on R1.12 (the answer pipeline) and R1.11 (tool cards with `stack` and `entry_points`). R2.1–R2.3 can be designed in parallel with R1.13 (web chat UI).
