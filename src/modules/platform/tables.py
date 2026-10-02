@@ -1,8 +1,8 @@
 """SQLAlchemy Core Table objects for the ``onestop`` schema (ARCHITECTURE S4.2).
 
-These objects are the Python representation of migration 0001's DDL.  They are
-used to build typed queries in application code; the database schema itself is
-the source of truth (managed by Alembic).
+These objects are the Python representation of migrations 0001 and 0002's DDL.
+They are used to build typed queries in application code; the database schema
+itself is the source of truth (managed by Alembic).
 
 Column types use standard SQLAlchemy equivalents where Postgres-specific types
 add no Python-side behaviour:
@@ -13,8 +13,10 @@ add no Python-side behaviour:
 - ``bigint GENERATED ALWAYS AS IDENTITY``-> ``sa.BigInteger()`` + ``autoincrement``
 - ``jsonb``                              -> ``postgresql.JSONB()``
 
-Knowledge tables (tools, documents, chunks, ...) are defined in a separate file
-added in R1 (migration 0002).
+Migration history:
+- 0001: all platform tables (R0.1 – R0.8)
+- 0002: session_link — adds ``session_id`` FK to ``llm_calls`` (R0.9)
+- 0003: knowledge tables (tools, documents, chunks, …) — R1
 """
 
 from __future__ import annotations
@@ -186,6 +188,8 @@ t_llm_calls = sa.Table(
         postgresql.ARRAY(postgresql.UUID(as_uuid=True)),
     ),
     sa.Column("error", sa.Text()),
+    # session_id added by migration 0002 (R0.9): nullable FK to sessions.
+    sa.Column("session_id", postgresql.UUID(as_uuid=True)),
 )
 
 # ---------------------------------------------------------------------------
